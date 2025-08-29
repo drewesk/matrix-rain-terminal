@@ -1,0 +1,24 @@
+{
+  "name": "matrix-rain-terminal",
+  "version": "1.0.0",
+  "description": "Matrix-style terminal rain animation (standalone CLI).",
+  "bin": {
+    "matrix-rain": "./bin/matrix-rain.js"
+  },
+  "scripts": {
+    "start": "node ./bin/matrix-rain.js",
+    "matrix": "node ./bin/matrix-rain.js"
+  },
+  "keywords": [
+    "cli",
+    "terminal",
+    "matrix",
+    "animation"
+  ],
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=14"
+  }
+}
+
