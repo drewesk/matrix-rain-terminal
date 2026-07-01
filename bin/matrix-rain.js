@@ -154,6 +154,11 @@ function parsePalette({ color, palette, width }) {
 const HALF_WIDTH_KATAKANA =
   "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ";
 
+const RAINBOW_HEAD_EMOJIS = ["🟢", "💚", "💊", "🐇", "🧬", "👾", "🤖", "🔋", "🔓", "🐛"];
+function getRandomEmoji() {
+  return RAINBOW_HEAD_EMOJIS[(Math.random() * RAINBOW_HEAD_EMOJIS.length) | 0];
+}
+
 function buildCharset(kind, customChars) {
   switch (String(kind || "matrix").toLowerCase()) {
     case "binary":
@@ -201,6 +206,7 @@ function buildCharset(kind, customChars) {
 
   const charset = buildCharset(cfg.charset, cfg.chars);
   const getRandomChar = () => charset.charAt((Math.random() * charset.length) | 0);
+  const isRainbow = !!cfg.palette && String(cfg.palette).toLowerCase() === "rainbow";
 
   if (!process.stdout.isTTY) {
     console.error("This program requires a TTY (interactive terminal).");
@@ -290,6 +296,7 @@ function buildCharset(kind, customChars) {
       y: Math.random() * h,
       dy: (0.4 + Math.random() * 0.8) * speedMul, // cells per frame
       lastRow: -99999,
+      headEmoji: getRandomEmoji(),
     }));
   }
 
@@ -322,6 +329,17 @@ function buildCharset(kind, customChars) {
       if (s.y > height + 20) {
         s.y = -Math.random() * 20;
         s.dy = (0.4 + Math.random() * 0.8) * cfg.speed;
+        s.headEmoji = getRandomEmoji();
+      }
+    }
+
+    // Rainbow-only: map the leading-tip cell of each stream to its emoji (render overlay only)
+    const headEmojiAt = isRainbow ? new Map() : null;
+    if (isRainbow) {
+      for (const s of streams) {
+        const row = ((s.lastRow % height) + height) % height;
+        const idx = row * width + s.x;
+        if (pixels[idx] > 0) headEmojiAt.set(idx, s.headEmoji);
       }
     }
 
@@ -360,6 +378,14 @@ function buildCharset(kind, customChars) {
         if (sgr !== lastSGR) {
           sb.push(sgr);
           lastSGR = sgr;
+        }
+        // Rainbow-only: draw an emoji at the stream's leading tip. Emojis are
+        // double-width, so consume the next cell to keep column alignment.
+        // Skip on the last column (no neighbor to consume) to avoid line wrap.
+        if (headEmojiAt && c < width - 1 && headEmojiAt.has(idx)) {
+          sb.push(headEmojiAt.get(idx));
+          c++; // the emoji occupies this cell and the next one
+          continue;
         }
         sb.push(chars[idx]);
       }
