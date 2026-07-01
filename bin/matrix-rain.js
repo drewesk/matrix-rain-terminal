@@ -159,6 +159,86 @@ function getRandomEmoji() {
   return RAINBOW_HEAD_EMOJIS[(Math.random() * RAINBOW_HEAD_EMOJIS.length) | 0];
 }
 
+// -------------------- Static banner overlay --------------------
+const BANNER_LABEL = "MAKEIT LABS";
+// Matrix-green border + letters on a solid black fill for legibility over the rain.
+const BOX_SGR = rgbToAnsiBg(0, 0, 0) + rgbToAnsiFg(0, 255, 65);
+
+// 5-row block-letter font (single-cell glyphs) for the ASCII-art banner.
+const BLOCK_FONT = {
+  " ": ["     ", "     ", "     ", "     ", "     "],
+  A: [" ███ ", "█   █", "█████", "█   █", "█   █"],
+  B: ["████ ", "█   █", "████ ", "█   █", "████ "],
+  E: ["█████", "█    ", "████ ", "█    ", "█████"],
+  I: ["█████", "  █  ", "  █  ", "  █  ", "█████"],
+  K: ["█   █", "█  █ ", "███  ", "█  █ ", "█   █"],
+  L: ["█    ", "█    ", "█    ", "█    ", "█████"],
+  M: ["█   █", "██ ██", "█ █ █", "█   █", "█   █"],
+  S: ["█████", "█    ", "█████", "    █", "█████"],
+  T: ["█████", "  █  ", "  █  ", "  █  ", "  █  "],
+};
+
+function renderBlockWord(word) {
+  const rows = ["", "", "", "", ""];
+  const chars = word.toUpperCase().split("");
+  for (let i = 0; i < chars.length; i++) {
+    const g = BLOCK_FONT[chars[i]] || BLOCK_FONT[" "];
+    for (let r = 0; r < 5; r++) rows[r] += (i > 0 ? " " : "") + g[r];
+  }
+  return rows;
+}
+
+// Stack the words (keeps width ~half of a single line) and frame them.
+function buildBannerBox(label, padX = 3, padY = 1) {
+  const words = label.split(/\s+/).filter(Boolean);
+  const blocks = words.map(renderBlockWord);
+  const bodyW = Math.max(...blocks.map((b) => b[0].length));
+  const body = [];
+  blocks.forEach((blk, i) => {
+    if (i > 0) body.push(" ".repeat(bodyW)); // blank row between words
+    for (const row of blk) {
+      const pad = bodyW - row.length;
+      const left = pad >> 1;
+      body.push(" ".repeat(left) + row + " ".repeat(pad - left));
+    }
+  });
+  const innerW = bodyW + padX * 2;
+  const p = " ".repeat(padX);
+  const blank = "│" + " ".repeat(innerW) + "│";
+  const lines = ["┌" + "─".repeat(innerW) + "┐"];
+  for (let i = 0; i < padY; i++) lines.push(blank);
+  for (const row of body) lines.push("│" + p + row + p + "│");
+  for (let i = 0; i < padY; i++) lines.push(blank);
+  lines.push("└" + "─".repeat(innerW) + "┘");
+  return lines;
+}
+
+// Simple single-line fallback for terminals too small for the banner.
+function buildSimpleBox(label, padX = 1) {
+  const inner = " ".repeat(padX) + label + " ".repeat(padX);
+  const w = inner.length;
+  return ["┌" + "─".repeat(w) + "┐", "│" + inner + "│", "└" + "─".repeat(w) + "┘"];
+}
+
+const BANNER_BOX = buildBannerBox(BANNER_LABEL); // stacked ASCII-art, ~41x15
+const SIMPLE_BOX = buildSimpleBox(BANNER_LABEL); // fallback for tiny terminals
+
+// Pick the largest overlay that fits and center it in the current terminal.
+function computeOverlay(w, h) {
+  let lines = BANNER_BOX;
+  if (w < lines[0].length || h < lines.length) lines = SIMPLE_BOX;
+  if (w < lines[0].length || h < lines.length) return null; // too small even for fallback
+  const boxW = lines[0].length;
+  const boxH = lines.length;
+  return {
+    lines,
+    boxW,
+    boxH,
+    startCol: Math.max(0, (w - boxW) >> 1),
+    startRow: Math.max(0, (h - boxH) >> 1),
+  };
+}
+
 function buildCharset(kind, customChars) {
   switch (String(kind || "matrix").toLowerCase()) {
     case "binary":
@@ -353,6 +433,9 @@ function buildCharset(kind, customChars) {
       }
     }
 
+    // Static centered banner overlay (re-centered every frame => resize-safe)
+    const overlay = computeOverlay(width, height);
+
     // Render
     const sb = [];
     sb.push(HOME);
@@ -360,8 +443,18 @@ function buildCharset(kind, customChars) {
 
     for (let r = 0; r < height; r++) {
       let lastSGR = "";
+      const inBoxRow = overlay && r >= overlay.startRow && r < overlay.startRow + overlay.boxH;
       for (let c = 0; c < width; c++) {
         const idx = r * width + c;
+        // Banner overlay takes priority over the rain (and emoji heads).
+        if (inBoxRow && c >= overlay.startCol && c < overlay.startCol + overlay.boxW) {
+          if (lastSGR !== BOX_SGR) {
+            sb.push(BOX_SGR);
+            lastSGR = BOX_SGR;
+          }
+          sb.push(overlay.lines[r - overlay.startRow][c - overlay.startCol]);
+          continue;
+        }
         const v = pixels[idx];
         if (v <= 0) {
           if (lastSGR) {
@@ -382,7 +475,9 @@ function buildCharset(kind, customChars) {
         // Rainbow-only: draw an emoji at the stream's leading tip. Emojis are
         // double-width, so consume the next cell to keep column alignment.
         // Skip on the last column (no neighbor to consume) to avoid line wrap.
-        if (headEmojiAt && c < width - 1 && headEmojiAt.has(idx)) {
+        const nextIsBox =
+          inBoxRow && c + 1 >= overlay.startCol && c + 1 < overlay.startCol + overlay.boxW;
+        if (headEmojiAt && c < width - 1 && !nextIsBox && headEmojiAt.has(idx)) {
           sb.push(headEmojiAt.get(idx));
           c++; // the emoji occupies this cell and the next one
           continue;
