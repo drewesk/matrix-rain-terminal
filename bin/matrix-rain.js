@@ -161,55 +161,48 @@ function getRandomEmoji() {
 
 // -------------------- Static banner overlay --------------------
 const BANNER_LABEL = "MAKEIT LABS";
-// Matrix-green border + letters on a solid black fill for legibility over the rain.
-const BOX_SGR = rgbToAnsiBg(0, 0, 0) + rgbToAnsiFg(0, 255, 65);
+// Matrix-green letters/border with a TRANSPARENT background so the rain shows
+// through behind the banner (only the glyph strokes are opaque).
+const BANNER_FG = rgbToAnsiFg(0, 255, 65);
 
-// 5-row block-letter font (single-cell glyphs) for the ASCII-art banner.
+// Crisp full-block font (5 cells tall) so each letter is sharply defined while
+// still fitting on ONE line. Full blocks avoid the muddy half-block look.
 const BLOCK_FONT = {
-  " ": ["     ", "     ", "     ", "     ", "     "],
-  A: [" ███ ", "█   █", "█████", "█   █", "█   █"],
-  B: ["████ ", "█   █", "████ ", "█   █", "████ "],
-  E: ["█████", "█    ", "████ ", "█    ", "█████"],
-  I: ["█████", "  █  ", "  █  ", "  █  ", "█████"],
-  K: ["█   █", "█  █ ", "███  ", "█  █ ", "█   █"],
-  L: ["█    ", "█    ", "█    ", "█    ", "█████"],
   M: ["█   █", "██ ██", "█ █ █", "█   █", "█   █"],
-  S: ["█████", "█    ", "█████", "    █", "█████"],
-  T: ["█████", "  █  ", "  █  ", "  █  ", "  █  "],
+  A: [" ██ ", "█  █", "████", "█  █", "█  █"],
+  K: ["█  █", "█ █ ", "██  ", "█ █ ", "█  █"],
+  E: ["████", "█   ", "███ ", "█   ", "████"],
+  I: ["████", " ██ ", " ██ ", " ██ ", "████"],
+  T: ["████", " ██ ", " ██ ", " ██ ", " ██ "],
+  L: ["█   ", "█   ", "█   ", "█   ", "████"],
+  B: ["███ ", "█ █ ", "███ ", "█ █ ", "███ "],
+  S: ["████", "█   ", "███ ", "   █", "████"],
 };
+const FONT_H = 5;
+const BLANK_GLYPH = new Array(FONT_H).fill("     ");
+const SPACE_GLYPH = new Array(FONT_H).fill("  ");
 
-function renderBlockWord(word) {
-  const rows = ["", "", "", "", ""];
-  const chars = word.toUpperCase().split("");
-  for (let i = 0; i < chars.length; i++) {
-    const g = BLOCK_FONT[chars[i]] || BLOCK_FONT[" "];
-    for (let r = 0; r < 5; r++) rows[r] += (i > 0 ? " " : "") + g[r];
-  }
+// Render the whole label on a single line (not stacked).
+function renderBlockLine(label) {
+  const glyphs = label
+    .toUpperCase()
+    .split("")
+    .map((ch) => (ch === " " ? SPACE_GLYPH : BLOCK_FONT[ch] || BLANK_GLYPH));
+  const rows = new Array(FONT_H).fill("");
+  glyphs.forEach((g, i) => {
+    for (let r = 0; r < FONT_H; r++) rows[r] += (i > 0 ? " " : "") + g[r];
+  });
   return rows;
 }
 
-// Stack the words (keeps width ~half of a single line) and frame them.
-function buildBannerBox(label, padX = 3, padY = 1) {
-  const words = label.split(/\s+/).filter(Boolean);
-  const blocks = words.map(renderBlockWord);
-  const bodyW = Math.max(...blocks.map((b) => b[0].length));
-  const body = [];
-  blocks.forEach((blk, i) => {
-    if (i > 0) body.push(" ".repeat(bodyW)); // blank row between words
-    for (const row of blk) {
-      const pad = bodyW - row.length;
-      const left = pad >> 1;
-      body.push(" ".repeat(left) + row + " ".repeat(pad - left));
-    }
-  });
-  const innerW = bodyW + padX * 2;
+// Frame the single-line block text (~1/3 the size of the old banner).
+function buildBannerBox(label, padX = 2) {
+  const body = renderBlockLine(label);
+  const innerW = body[0].length + padX * 2;
   const p = " ".repeat(padX);
-  const blank = "│" + " ".repeat(innerW) + "│";
-  const lines = ["┌" + "─".repeat(innerW) + "┐"];
-  for (let i = 0; i < padY; i++) lines.push(blank);
-  for (const row of body) lines.push("│" + p + row + p + "│");
-  for (let i = 0; i < padY; i++) lines.push(blank);
-  lines.push("└" + "─".repeat(innerW) + "┘");
+  const lines = ["┏" + "━".repeat(innerW) + "┓"];
+  for (const row of body) lines.push("┃" + p + row + p + "┃");
+  lines.push("┗" + "━".repeat(innerW) + "┛");
   return lines;
 }
 
@@ -217,10 +210,10 @@ function buildBannerBox(label, padX = 3, padY = 1) {
 function buildSimpleBox(label, padX = 1) {
   const inner = " ".repeat(padX) + label + " ".repeat(padX);
   const w = inner.length;
-  return ["┌" + "─".repeat(w) + "┐", "│" + inner + "│", "└" + "─".repeat(w) + "┘"];
+  return ["┏" + "━".repeat(w) + "┓", "┃" + inner + "┃", "┗" + "━".repeat(w) + "┛"];
 }
 
-const BANNER_BOX = buildBannerBox(BANNER_LABEL); // stacked ASCII-art, ~41x15
+const BANNER_BOX = buildBannerBox(BANNER_LABEL); // single-line ASCII-art, ~65x7
 const SIMPLE_BOX = buildSimpleBox(BANNER_LABEL); // fallback for tiny terminals
 
 // Pick the largest overlay that fits and center it in the current terminal.
@@ -441,6 +434,10 @@ function buildCharset(kind, customChars) {
     sb.push(HOME);
     if (bgSGR) sb.push(bgSGR);
 
+    // Banner glyphs: green foreground on the rain background (no black fill),
+    // so the border/letters are opaque but nothing shows a black box.
+    const bannerSGR = RESET + bgSGR + BANNER_FG;
+
     for (let r = 0; r < height; r++) {
       let lastSGR = "";
       const inBoxRow = overlay && r >= overlay.startRow && r < overlay.startRow + overlay.boxH;
@@ -450,17 +447,17 @@ function buildCharset(kind, customChars) {
         if (inBoxRow && c >= overlay.startCol && c < overlay.startCol + overlay.boxW) {
           const bch = overlay.lines[r - overlay.startRow][c - overlay.startCol];
           if (bch !== " ") {
-            // Solid glyph (green on black) so text/border are never see-through.
-            if (lastSGR !== BOX_SGR) {
-              sb.push(BOX_SGR);
-              lastSGR = BOX_SGR;
+            // Opaque glyph (green on the rain background) => never see-through,
+            // and no black box behind the border/letters.
+            if (lastSGR !== bannerSGR) {
+              sb.push(bannerSGR);
+              lastSGR = bannerSGR;
             }
             sb.push(bch);
             continue;
           }
-          // Blank cell inside the box => let the rain show through. Clear the
-          // opaque box background first so no black box leaks behind the rain.
-          if (lastSGR === BOX_SGR) {
+          // Blank cell inside the box => let the rain flow through behind it.
+          if (lastSGR === bannerSGR) {
             sb.push(RESET);
             if (bgSGR) sb.push(bgSGR);
             lastSGR = "";
