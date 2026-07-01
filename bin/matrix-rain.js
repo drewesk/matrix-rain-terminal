@@ -446,14 +446,25 @@ function buildCharset(kind, customChars) {
       const inBoxRow = overlay && r >= overlay.startRow && r < overlay.startRow + overlay.boxH;
       for (let c = 0; c < width; c++) {
         const idx = r * width + c;
-        // Banner overlay takes priority over the rain (and emoji heads).
+        // Banner overlay: opaque letters/border, transparent (see-through) fill.
         if (inBoxRow && c >= overlay.startCol && c < overlay.startCol + overlay.boxW) {
-          if (lastSGR !== BOX_SGR) {
-            sb.push(BOX_SGR);
-            lastSGR = BOX_SGR;
+          const bch = overlay.lines[r - overlay.startRow][c - overlay.startCol];
+          if (bch !== " ") {
+            // Solid glyph (green on black) so text/border are never see-through.
+            if (lastSGR !== BOX_SGR) {
+              sb.push(BOX_SGR);
+              lastSGR = BOX_SGR;
+            }
+            sb.push(bch);
+            continue;
           }
-          sb.push(overlay.lines[r - overlay.startRow][c - overlay.startCol]);
-          continue;
+          // Blank cell inside the box => let the rain show through. Clear the
+          // opaque box background first so no black box leaks behind the rain.
+          if (lastSGR === BOX_SGR) {
+            sb.push(RESET);
+            if (bgSGR) sb.push(bgSGR);
+            lastSGR = "";
+          }
         }
         const v = pixels[idx];
         if (v <= 0) {
