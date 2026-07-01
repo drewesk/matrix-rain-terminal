@@ -427,7 +427,8 @@ function buildCharset(kind, customChars) {
     }
 
     // Static centered banner overlay (re-centered every frame => resize-safe)
-    const overlay = computeOverlay(width, height);
+    // Only show the MAKEIT LABS banner when the rainbow palette is active.
+    const overlay = isRainbow ? computeOverlay(width, height) : null;
 
     // Render
     const sb = [];
