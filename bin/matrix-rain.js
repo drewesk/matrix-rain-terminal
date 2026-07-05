@@ -154,7 +154,7 @@ function parsePalette({ color, palette, width }) {
 const HALF_WIDTH_KATAKANA =
   "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ";
 
-const RAINBOW_HEAD_EMOJIS = ["🟢", "💚", "💊", "🐇", "🧬", "👾", "🤖", "🔋", "🔓", "🐛"];
+const RAINBOW_HEAD_EMOJIS = ["🟢", "😀", "🚀", "🐇", "🧬", "👾", "🤖", "🔋", "🔓", "💀"];
 function getRandomEmoji() {
   return RAINBOW_HEAD_EMOJIS[(Math.random() * RAINBOW_HEAD_EMOJIS.length) | 0];
 }
